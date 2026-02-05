@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Myanmar Seismicity & Tectonics Map</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Tailwind for UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+        #map { height: 100vh; width: 100%; background: #e5e7eb; }
+        
+        /* Pulse Animation for Epicenter */
+        .pulse {
+            display: block;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #ef4444;
+            cursor: pointer;
+            box-shadow: 0 0 0 rgba(239, 68, 68, 0.4);
+            animation: pulse 2s infinite;
+        }
+
+        .pulse-extra-large {
+            width: 28px;
+            height: 28px;
+            background: #7f1d1d;
+        }
+
+        .pulse-large {
+            width: 24px;
+            height: 24px;
+            background: #b91c1c;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+        .leaflet-popup-content-wrapper {
+            background: #ffffff;
+            color: #1f2937;
+            border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+            padding: 0;
+        }
+        .leaflet-popup-content { margin: 12px; }
+        .leaflet-popup-tip { background: #ffffff; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans">
+
+    <!-- Top Navigation Overlay -->
+    <nav class="absolute top-0 left-0 right-0 z-[1001] bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex justify-between items-center shadow-sm">
+        <div>
+            <h1 class="text-lg font-bold flex items-center gap-2 text-slate-800">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-600"><path d="M2 12h5l2 8 5-16 2 8h5"/></svg>
+                Myanmar Seismic Monitoring
+            </h1>
+            <p class="text-[10px] text-slate-500 uppercase tracking-tight">Triple Event Sequence • Feb 03, 2026</p>
+        </div>
+        <div class="flex gap-2">
+            <button onclick="viewAll()" class="bg-white hover:bg-slate-50 text-xs px-3 py-1.5 rounded-md border border-slate-300 transition-colors text-slate-700 font-medium shadow-sm">View Cluster</button>
+        </div>
+    </nav>
+
+    <!-- Side Panel -->
+    <aside class="absolute top-20 left-4 z-[1000] w-80 max-h-[calc(100vh-120px)] bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+        <div class="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+            <h2 class="font-bold text-xs uppercase tracking-widest text-slate-400">Activity Log</h2>
+            <span class="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded-full font-bold">3 Events</span>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-3" id="event-list">
+            <!-- Events injected here -->
+        </div>
+
+        <div class="p-4 border-t border-slate-100 space-y-3">
+            <div>
+                <h3 class="text-[10px] text-slate-400 uppercase font-bold mb-2">Seismic Legend</h3>
+                <div class="space-y-2 text-[11px] text-slate-600">
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-[#7f1d1d]"></span>
+                        <span>M5.5+ Significant</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-[#b91c1c]"></span>
+                        <span>M5.0+ Major</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-orange-500"></span>
+                        <span>M4.0+ Moderate</span>
+                    </div>
+                </div>
+            </div>
+            <div class="pt-2 text-[10px] text-slate-400 text-center italic">
+                Data: drtinkooo / Myanmar Earthquake Archive
+            </div>
+        </div>
+    </aside>
+
+    <div id="map"></div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        const earthquakes = [
+            {
+                id: 2,
+                mag: 5.8,
+                depth: 10,
+                lat: 20.496,
+                lon: 93.951,
+                timeMMT: "2026-02-03 22:04:08",
+                region: "Rakhine State (Coastal)",
+                color: "#7f1d1d",
+                pulseType: "pulse pulse-extra-large"
+            },
+            {
+                id: 1,
+                mag: 5.4,
+                depth: 10,
+                lat: 20.453,
+                lon: 93.428,
+                timeMMT: "2026-02-03 22:21:21",
+                region: "Bay of Bengal (Offshore)",
+                color: "#b91c1c",
+                pulseType: "pulse pulse-large"
+            },
+            {
+                id: 3,
+                mag: 4.2,
+                depth: 10,
+                lat: 21.993,
+                lon: 96.118,
+                timeMMT: "2026-02-03 12:42:03",
+                region: "Central Myanmar",
+                color: "#f97316",
+                pulseType: "pulse"
+            }
+        ];
+
+        const geojsonUrl = 'https://raw.githubusercontent.com/drtinkooo/myanmar-earthquake-archive/main/Myanmar_Tectonic_Map_2011.geojson';
+        const lineamentColor = '#5D4037';
+
+        const map = L.map('map', {
+            zoomControl: false,
+            attributionControl: true
+        }).setView([21.2, 95], 6);
+
+        L.control.scale({ position: 'bottomright', imperial: false }).addTo(map);
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        const markers = {};
+        const listContainer = document.getElementById('event-list');
+
+        earthquakes.forEach(quake => {
+            const icon = L.divIcon({
+                className: 'custom-div-icon',
+                html: `<div class="${quake.pulseType}" style="background: ${quake.color}"></div>`,
+                iconSize: [28, 28],
+                iconAnchor: [14, 14]
+            });
+
+            const marker = L.marker([quake.lat, quake.lon], { icon: icon }).addTo(map);
+            markers[quake.id] = marker;
+
+            const popupHtml = `
+                <div class="font-sans min-w-[180px]">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="px-2 py-0.5 bg-slate-100 rounded text-[10px] font-bold text-slate-600 uppercase">Magnitude</span>
+                        <span class="text-lg font-black" style="color: ${quake.color}">${quake.mag}</span>
+                    </div>
+                    <div class="space-y-1 text-xs text-slate-600 border-t border-slate-100 pt-2">
+                        <p class="flex justify-between"><span>Region:</span> <b class="text-slate-900">${quake.region}</b></p>
+                        <p class="flex justify-between"><span>Depth:</span> <b class="text-slate-900">${quake.depth} km</b></p>
+                        <p class="text-[10px] text-slate-400 mt-2">${quake.timeMMT} MMT</p>
+                    </div>
+                </div>
+            `;
+            marker.bindPopup(popupHtml);
+
+            // Sidebar Item
+            const item = document.createElement('div');
+            const isSignificant = quake.mag >= 5.5;
+            item.className = `p-3 rounded-xl border cursor-pointer transition-all hover:shadow-md ${isSignificant ? 'bg-red-50 border-red-200' : 'bg-white border-slate-100'}`;
+            item.innerHTML = `
+                <div class="flex items-start justify-between gap-3">
+                    <div class="flex-1">
+                        <h4 class="text-xs font-bold text-slate-800">${quake.region}</h4>
+                        <p class="text-[10px] text-slate-500 mb-2">${quake.timeMMT}</p>
+                        <div class="flex gap-1.5">
+                            <span class="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-medium">10km</span>
+                            <span class="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-medium">${quake.lat}, ${quake.lon}</span>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-xl font-black leading-none" style="color: ${quake.color}">${quake.mag}</div>
+                        <div class="text-[8px] font-bold text-slate-400 uppercase mt-1">Mag</div>
+                    </div>
+                </div>
+            `;
+            item.onclick = () => focusQuake(quake.id);
+            listContainer.appendChild(item);
+        });
+
+        function focusQuake(id) {
+            const quake = earthquakes.find(q => q.id === id);
+            map.flyTo([quake.lat, quake.lon], 9, { duration: 1.5 });
+            setTimeout(() => markers[id].openPopup(), 1600);
+        }
+
+        function viewAll() {
+            const group = L.featureGroup(Object.values(markers));
+            map.fitBounds(group.getBounds().pad(0.3));
+        }
+
+        fetch(geojsonUrl)
+            .then(res => res.json())
+            .then(data => {
+                L.geoJSON(data, {
+                    style: () => ({ color: lineamentColor, weight: 1.5, opacity: 0.5 }),
+                    onEachFeature: (feature, layer) => {
+                        layer.bindPopup(`<div class="text-xs font-bold">${feature.properties.NAME || 'Fault'}</div>`);
+                        layer.on('mouseover', function() { this.setStyle({ color: '#ef4444', weight: 3, opacity: 1 }); });
+                        layer.on('mouseout', function() { this.setStyle({ color: lineamentColor, weight: 1.5, opacity: 0.5 }); });
+                    }
+                }).addTo(map);
+            });
+
+        window.onload = viewAll;
+
+    </script>
+</body>
+</html>
